@@ -1,40 +1,40 @@
-/*
- * Merge multiple concepts (and delete others)
- * 
- * (c) 2020 Jean-Baptiste Sarrodie
- * 
- * Version 1.1 (2020/01/20) Add an option to keep only the content of the "target" concept
- * Version 1.0 (2019/11/12) First version published
- *
- * Known limitation: works only on elements, not relationships
- */
-
+// Merge multiple concepts (and delete others)
+//
+// Requires jArchi - https://www.archimatetool.com/blog/2018/07/02/jarchi/
+//
+// This script merges multiple concepts (and delete others)
+//
+// Version 1.2 (2024/06/07) A.Haumont@CCF : Support relations merging + option to change concept types before merging
+// Version 1.1 (2020/01/20) Add an option to keep only the content of the "target" concept
+// Version 1.0 (2019/11/12) First version published
+//
+//
+// (c) 2020 Jean-Baptiste Sarrodie
+ 
 console.show();
 console.clear();
-
-var el_selection = selection.filter("element");
-
+ 
+//var el_selection = selection.filter("element");
+var el_selection = selection.filter("concept");
+ 
 if(el_selection.size() < 2) {
   window.alert("You have to select at least two elements to run this script. Note: merging relationships is not supported for the moment.");
   exit();
 }
-
+ 
 var list = "Which element do you want to keep (enter its index)?";
 var index = 1;
-
+ 
 el_selection.each(function(o) {
-  list += "\n  ("+index+") "+o.name;
+  list += "\n  ("+index+") "+o.name + " - " + o.type;
   index++
 })
- 
 var answer = window.prompt(list, "1");
- 
 if(answer) {
   var relaxed = window.confirm('By default, only documentation and properties of the target element are saved (those of merged elements are cleared). Click Ok for this behavior or Cancel if you want a "strict" mode where they are copied into target element.');
-
+ 
   var merge_target = el_selection.get(answer-1);
   var to_be_deleted = $("#null");
- 
   el_selection.not($(merge_target)).each(function(o) {
     console.log('Merging "', o.name, '" into "', merge_target.name, '"');
     // We don't want to delete while iterating on the collection, so create
@@ -43,9 +43,27 @@ if(answer) {
     if (relaxed) {
       removeDocAndProps(concept(o));
     }
+
+    // if different concept types are mixed, propose to change type before merge :
+    if (o.type != merge_target.type) {
+      var changeType = window.confirm('Your selection contain a mix of concept types, confirm you want to mutate objects to the selected type ' + merge_target.type + ' before merging ?.\n Click Ok to mutate or cancel to continue as-is (error will be thrown while merging).');
+      if (changeType) {
+        // swap source/dest to match merge_target ! (avoir errors for invalid relationships)
+        if (merge_target.source != o.source) {
+          console.log('Forcing source/target on rel : ' + o +" {s:" +o.source+"}" +" -> " + "{t:" + o.target+"}");
+          console.log('to match target : ' + merge_target +" {s:" +merge_target.source+"}" +" -> " + "{t:" + merge_target.target+"}");
+          concept(o).source = concept(merge_target.source);
+          concept(o).target = concept(merge_target.target);
+          console.log('changed to : ' + o +" {s:" +o.source+"}" +" -> " + "{t:" + o.target+"}");
+        }
+        console.log('Changing type before merge "', o.type, '" into "', merge_target.type, '"');
+        concept(o).type = merge_target.type;
+      } 
+    }
+
     concept(merge_target).merge(concept(o));
   });
-  
+ 
   // Deletion loop
   to_be_deleted.each(function(e) {
     e.delete();
@@ -53,14 +71,13 @@ if(answer) {
 } else {
   console.log("Merge cancelled");
 }
- 
 function concept(o) {
   if(o.concept)
     return o.concept;
   else
     return o;
 }
-
+ 
 function removeDocAndProps(c) {
   c.documentation = "";
   c.prop().forEach(function(p) {
